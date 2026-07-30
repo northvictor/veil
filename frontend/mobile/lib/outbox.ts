@@ -1,3 +1,12 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
+import {
+  rpc as SorobanRpc,
+  TransactionBuilder,
+  type Transaction,
+  type FeeBumpTransaction,
+} from '@stellar/stellar-sdk';
+
 /**
  * AsyncStorage-backed offline transaction outbox with auto-replay on reconnect.
  *
@@ -17,15 +26,6 @@
  * transactions — only read them. expo-secure-store's ~2 KB per-item limit
  * prevents it as a drop-in replacement for the queue.
  */
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
-import {
-  rpc as SorobanRpc,
-  TransactionBuilder,
-  type Transaction,
-  type FeeBumpTransaction,
-} from '@stellar/stellar-sdk';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -127,9 +127,7 @@ export class MobileOutbox {
         (e) => e.sequence === seq && e.hash !== input.hash,
       );
       if (clash) {
-        throw new Error(
-          `Sequence ${seq} already queued as ${clash.hash}`,
-        );
+        throw new Error(`Sequence ${seq} already queued as ${clash.hash}`);
       }
 
       const entry: OutboxEntry = {
@@ -185,17 +183,12 @@ export class MobileOutbox {
       // Dedup: is the hash already known to the network?
       try {
         const known = await server.getTransaction(entry.hash);
-        if (
-          known.status ===
-          SorobanRpc.Api.GetTransactionStatus.SUCCESS
-        ) {
+        if (known.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
           result.skippedDuplicate.push({ ...entry, status: 'confirmed' });
           toRemove.add(entry.hash);
           continue;
         }
-        if (
-          known.status === SorobanRpc.Api.GetTransactionStatus.FAILED
-        ) {
+        if (known.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
           result.failed.push({ ...entry, status: 'failed' });
           toRemove.add(entry.hash);
           continue;
@@ -232,11 +225,7 @@ export class MobileOutbox {
             status: 'failed',
             lastError: `Transaction rejected: ${msg}`,
           });
-          result.failed.push({
-            ...entry,
-            status: 'failed',
-            lastError: msg,
-          });
+          result.failed.push({ ...entry, status: 'failed', lastError: msg });
           toRemove.add(entry.hash);
           continue;
         }
@@ -298,13 +287,9 @@ export class MobileOutbox {
   ): Promise<'SUCCESS' | 'FAILED' | 'TIMEOUT'> {
     for (let i = 0; i < maxAttempts; i++) {
       const res = await server.getTransaction(hash);
-      if (
-        res.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS
-      )
+      if (res.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS)
         return 'SUCCESS';
-      if (
-        res.status === SorobanRpc.Api.GetTransactionStatus.FAILED
-      )
+      if (res.status === SorobanRpc.Api.GetTransactionStatus.FAILED)
         return 'FAILED';
       await new Promise((r) => setTimeout(r, intervalMs));
     }
